@@ -1,22 +1,47 @@
 name: ghcr
 
-# Fork build: publishes ghcr.io/<owner>/scanservjs for the mobile-ui branch.
-# Tag a commit `v<upstream>-mobile.<n>` (e.g. v3.3.0-mobile.1) to publish that version.
+# Fork build: publishes ghcr.io/<owner>/scanservjs with the mobile-ui commits.
+#
+# - Tag push `v<upstream>-mobile.<n>` builds the branch as committed.
+# - Daily schedule checks for a new upstream release; if `<version>-mobile.1`
+#   isn't published yet, it rebases the fork's commits onto that release inside
+#   the runner and builds it. The branch itself is not rewritten (GITHUB_TOKEN
+#   can't push commits that touch workflow files). A rebase conflict fails the
+#   job, and GitHub's failure email is the signal to rebase by hand.
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * *'
   push:
-    branches: [mobile-ui]
     tags: ['v*-mobile.*']
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: Upstream tag to rebase onto (default latest release)
+        required: false
+      push:
+        description: Push the image
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   packages: write
+  actions: write
+
+concurrency:
+  group: ghcr
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: sbs20/scanservjs
 
 jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: docker/setup-buildx-action@v4
 
@@ -26,18 +51,51 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/scanservjs"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          upstream="${UPSTREAM_TAG:-$(gh release view --repo "$UPSTREAM" --json tagName -q .tagName)}"
+          tag="${upstream#v}-mobile.1"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if [[ -z "$UPSTREAM_TAG" ]] && docker buildx imagetools inspect "$image:$tag" >/dev/null 2>&1; then
+            echo "$image:$tag already published"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$upstream:refs/tags/$upstream"
+          # Nearest plain release tag skips our -mobile tags and upstream prereleases
+          base=$(git describe --tags --abbrev=0 --exclude '*-*' HEAD)
+          echo "Rebasing $(git rev-list --count "$base..HEAD") commit(s) from $base onto $upstream"
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
+            rebase --onto "$upstream" "$base"
+
       - id: meta
+        if: steps.version.outputs.skip != 'true'
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository_owner }}/scanservjs
-          tags: |
-            type=match,pattern=v(.*),group=1
-            type=ref,event=branch
-            type=sha
+          images: ${{ steps.version.outputs.image }}
+          tags: type=raw,value=${{ steps.version.outputs.tag }}
 
       - uses: docker/build-push-action@v7
+        if: steps.version.outputs.skip != 'true'
         with:
-          push: true
+          # Build the (possibly rebased) working tree, not the git ref
+          context: .
+          push: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
@@ -46,3 +104,11 @@ jobs:
           platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # GitHub disables schedules after 60 days without repo activity; re-enable
+      # on every run (best effort)
+      - name: Keep schedule enabled
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/ghcr.yml/enable"
