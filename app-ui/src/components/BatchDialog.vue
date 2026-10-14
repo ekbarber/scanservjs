@@ -5,13 +5,13 @@
         {{ message }}
       </v-card-title>
       <v-card-text>
-        <div class="d-flex flex-wrap flex-row-reverse">
-          <v-btn small color="primary" text @click.prevent="next">{{ $t('batch-dialog.btn-next') }}</v-btn>
-          <v-btn v-if="onFinish" small color="green" text @click.prevent="finish">{{ $t('batch-dialog.btn-finish') }}</v-btn>
-          <v-btn v-if="onRescan" small text @click.prevent="rescan">{{ $t('batch-dialog.btn-rescan') }}</v-btn>
-          <v-btn small text color="warning" @click.prevent="show = false">{{ $t('batch-dialog.btn-cancel') }}</v-btn>
+        <div class="batch-actions mb-4">
+          <v-btn color="primary" size="large" @click.prevent="next">{{ $t('batch-dialog.btn-next') }}</v-btn>
+          <v-btn v-if="onFinish" color="green" size="large" @click.prevent="finish">{{ $t('batch-dialog.btn-finish') }}</v-btn>
+          <v-btn v-if="onRescan" size="large" @click.prevent="rescan">{{ $t('batch-dialog.btn-rescan') }}</v-btn>
+          <v-btn color="warning" size="large" @click.prevent="show = false">{{ $t('batch-dialog.btn-cancel') }}</v-btn>
         </div>
-        <v-img v-if="image" :src="'data:image/jpeg;base64,' + image" contain />
+        <v-img v-if="image" :src="'data:image/jpeg;base64,' + image" max-height="65vh" contain />
       </v-card-text>
       <v-card-actions />
     </v-card>
@@ -73,3 +73,17 @@ export default {
   }
 };
 </script>
+
+<style scoped>
+/* Large, evenly sized targets kept above the preview so they never scroll away */
+.batch-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.batch-actions .v-btn {
+  height: 52px;
+  font-size: 1rem;
+}
+</style>

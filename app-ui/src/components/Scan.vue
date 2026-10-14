@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div :class="{ 'scan-page--mobile': smAndDown }">
     <v-row>
       <v-col cols="12" md="3" class="mb-10 mb-md-0">
         <div class="d-flex">
@@ -61,8 +61,8 @@
           item-title="text"
           item-value="value" />
 
-        <div class="d-flex flex-row-reverse flex-wrap">
-          <v-btn color="blue" class="ml-1 mb-1" @click="scan(1)">{{ $t('scan.btn-scan') }} <v-icon class="ml-2" :icon="mdiCamera" /></v-btn>
+        <div class="d-flex flex-row-reverse flex-wrap" :class="{ 'scan-actions--mobile': smAndDown }">
+          <v-btn color="blue" class="ml-1 mb-1 scan-actions__primary" @click="scan(1)">{{ $t('scan.btn-scan') }} <v-icon class="ml-2" :icon="mdiCamera" /></v-btn>
           <v-btn v-if="geometry" color="green" class="ml-1 mb-1" @click="createPreview">{{ $t('scan.btn-preview') }} <v-icon class="ml-2" :icon="mdiMagnify" /></v-btn>
           <v-btn color="amber" class="ml-1 mb-1" @click="deletePreview">{{ $t('scan.btn-clear') }} <v-icon class="ml-2" :icon="mdiDelete" /></v-btn>
         </div>
@@ -133,6 +133,7 @@
 import { mdiCamera, mdiDelete, mdiMagnify, mdiRefresh } from '@mdi/js';
 import { Cropper } from 'vue-advanced-cropper';
 import { useI18n } from 'vue-i18n';
+import { useDisplay } from 'vuetify';
 import BatchDialog from './BatchDialog.vue';
 
 import Common from '../classes/common';
@@ -166,7 +167,9 @@ export default {
 
   setup() {
     const { te } = useI18n();
+    const { smAndDown } = useDisplay();
     return {
+      smAndDown,
       mdiCamera,
       mdiDelete,
       mdiMagnify,
@@ -616,5 +619,36 @@ export default {
   top: 0;
   left: 0;
   z-index: 10;
+}
+
+/* Mobile: pin the scan actions to the bottom of the screen within thumb reach.
+   z-index stays below #mask so the busy overlay still blocks taps. */
+.scan-page--mobile {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.scan-actions--mobile {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  flex-wrap: nowrap !important;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: rgb(var(--v-theme-surface));
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.scan-actions--mobile .v-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 56px;
+  margin: 0 !important;
+  font-size: 1rem;
+}
+
+.scan-actions--mobile .scan-actions__primary {
+  flex-grow: 1.6;
 }
 </style>
