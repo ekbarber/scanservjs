@@ -3,14 +3,14 @@ name: ghcr
 # Fork build: publishes ghcr.io/<owner>/scanservjs with the mobile-ui commits.
 #
 # - Tag push `v<upstream>-mobile.<n>` builds the branch as committed.
-# - Daily schedule checks for a new upstream release; if `<version>-mobile.1`
+# - Weekly schedule (Mondays) checks for a new upstream release; if `<version>-mobile.1`
 #   isn't published yet, it rebases the fork's commits onto that release inside
 #   the runner and builds it. The branch itself is not rewritten (GITHUB_TOKEN
 #   can't push commits that touch workflow files). A rebase conflict fails the
 #   job, and GitHub's failure email is the signal to rebase by hand.
 on:
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '17 6 * * 1'
   push:
     tags: ['v*-mobile.*']
   workflow_dispatch:
